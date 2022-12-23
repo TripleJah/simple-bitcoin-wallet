@@ -1,20 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
+  <head>
     <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
     <title>Pleb Wallet</title>
     <link rel="stylesheet" href="index.css">
-</head>
-<body>
-    <header>
+  </head>
+  <body>
+	<header>
         <h1>Pleb Wallet</h1>
     </header>
     <main>
         <div class="buttons">
-            <button>Send</button>
-            <button>Recieve</button>
+            <button onclick="alert('Send!')">Send</button>
+            <button onclick="alert('Receive!')">Receive</button>
         </div>
         <div class="row">
             <div class="balance-card">
@@ -50,8 +50,9 @@
     <footer>
         <p>Made by plebs, for plebs.</p>
     </footer>
+    
     <script>
-        function getData( url ) {
+        function getData( url, apikey, content_type ) {
             return new Promise( function( resolve, reject ){
                 var xhttp = new XMLHttpRequest();
                 xhttp.onreadystatechange = function() {
@@ -60,7 +61,13 @@
                         resolve( xhttp.responseText);
                     };
                 }
-                xhttp.open( `GET`, url, true);
+                xhttp.open( `GET`, url, true );
+                if ( apikey ) {
+                    xhttp.setRequestHeader( `X-Api-Key`, apikey );
+                }
+                if ( content_type ) {
+                    xhttp.setRequestHeader( `Content-Type`, content_type );
+                }
                 xhttp.send();
             });
         }
@@ -72,15 +79,50 @@
             var price = json[ `data` ][ `amount` ];
             return price;
         }
+
+        async function getLnbitsBalance() {
+            var data = await getData( `https://legend.lnbits.com/api/v1/wallet`, `68f97c0775de4571bfc08528358290fa` );
+            var json = JSON.parse( data );
+            var balance = Number( json[ `balance` ] ) / 1000;
+            return balance;
+        }
+
+        async function getLnbitsTransactions() {
+            var data = await getData( `https://legend.lnbits.com/api/v1/payments`, 
+            `68f97c0775de4571bfc08528358290fa`, `application/json` );
+            var json = JSON.parse( data );
+            var transactions = json;
+            return transactions;
+        }
     </script>
     <script>
         var $ = document.querySelector.bind( document );
         var $$ = document.querySelectorAll.bind( document );
         async function app() {
+            var balance = await getLnbitsBalance();
+            $$( `.balance-card p` )[0].innerHTML = balance + ` sats`;
             var price = await getBitcoinPrice();
             string_price = Number( price ).toLocaleString();
             $$( `.balance-card p`)[1].innerHTML = `$` + string_price;
             setTimeout( function() {app();}, 10000);
+            var txs = await getLnbitsTransactions();
+            txs.forEach( function( tx ) {
+                var amount = Math.floor( Number( tx[ "amount" ] ) / 1000 );
+                if ( amount > 0 && !$( `p[data-checking-id="${tx[ "checking_id" ]}"]` ) && !tx[ "pending" ] ) {
+                    $( `.row-item` ).innerHTML = $( `.row-item` ).innerHTML + `<p class="transaction" data-checking-id="${tx[ "checking_id" ]}">Received with <span title="${tx[ "bolt11" ]}">${tx[ "bolt11" ].substring( 0, 25 )}...</span></p><p class="transaction-amount">+${amount} sats</p>`;
+                }
+
+                if ( amount < 0 && !$( `p[data-checking-id="${tx[ "checking_id" ]}"]` ) && 
+                ( tx[ "preimage" ] != "0000000000000000000000000000000000000000000000000000000000000000" || 
+                ( !tx[ "pending" ] && tx[ "checking_id" ].startsWith( "internal" ) ) ) ) {
+                    if ( tx[ "fee" ] ) {amount = amount + ( tx[ "fee" ] / 1000 );}
+                    $( `.row-item` ).innerHTML = $( `.row-item` ).innerHTML + 
+                    `<p class="transaction" data-checking-id="${tx[ "checking_id" ]}">Sent with 
+                        <span title="${tx[ "bolt11" ]}">${tx[ "bolt11" ].substring( 0, 25 )}...</span></p>
+                        <p class="transaction-amount">${amount} sats</p>`;
+    }
+});
+
         }
         app();
     </script>
